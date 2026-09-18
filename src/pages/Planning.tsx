@@ -15,14 +15,14 @@ type SolutionForm = {
 }
 
 const initialForm: SolutionForm = {
-  solutionName: 'Plataforma e-commerce Nova',
+  solutionName: '',
   applicationType: 'Web empresarial',
-  description: 'Plataforma escalable para gestionar ventas, inventario y operaciones digitales.',
+  description: '',
   region: 'us-east-1',
-  users: '12000',
+  users: '',
   availability: 'Alta · 99.9%',
   objective: 'Modernización',
-  selectedServices: ['ec2', 'rds', 's3'],
+  selectedServices: [],
 }
 
 const controlClasses = 'w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-100'
