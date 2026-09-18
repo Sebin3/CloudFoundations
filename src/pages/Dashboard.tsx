@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { costDistribution, costTrend, monthlyTotal, securityChecks, services } from '../data/cloudData'
+import { costDistribution, costTrend, monthlyTotal, regions, securityChecks, services } from '../data/cloudData'
 import { Icon } from '../components/Icon'
 
 type DashboardTone = 'blue' | 'green' | 'amber' | 'purple'
@@ -101,7 +101,7 @@ export function Dashboard() {
       <section aria-label="Indicadores principales" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <MetricCard label="Costo mensual estimado" value={`$${monthlyTotal.toLocaleString('en-US')}`} detail="Proyección para septiembre" icon="payments" tone="amber" trend="5.2%" />
         <MetricCard label="Costo anual estimado" value={`$${annualTotal.toLocaleString('en-US')}`} detail="Proyección de inversión a 12 meses" icon="calendar_month" tone="blue" compact />
-        <MetricCard label="Región seleccionada" value="us-east-1" detail="N. Virginia · 48 recursos" icon="location_on" tone="blue" compact />
+        <MetricCard label="Regiones activas" value={`${regions.length}`} detail={`${regions.map((region) => region.location).join(' · ')}`} icon="location_on" tone="blue" compact />
         <MetricCard label="Recursos Cloud" value="78" detail="Distribuidos en 3 regiones activas" icon="deployed_code" tone="purple" trend="8.4%" />
         <MetricCard label="Estado de seguridad" value="92%" detail="4 de 5 controles correctos" icon="shield_lock" tone="green" />
         <MetricCard label="Estado de arquitectura" value="Operativa" detail="SLA 99.98% · sin incidentes" icon="account_tree" tone="green" compact />
