@@ -122,7 +122,7 @@ Además, el usuario puede buscar servicios y filtrarlos por categoría para ver 
 - Recharts
 - localStorage para persistencia
 
-## Requisitos del proyecto
+## Requisitos del proyecto de hoy
 
 Este proyecto incluye y cumple los requisitos solicitados:
 
