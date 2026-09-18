@@ -43,6 +43,7 @@ export type SecurityCheck = {
 export type Region = {
   name: string
   location: string
+  flag: string
   code: string
   services: string[]
   resources: number

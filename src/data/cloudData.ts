@@ -114,9 +114,9 @@ export const securityChecks: SecurityCheck[] = [
 ]
 
 export const regions: Region[] = [
-  { name: 'US East (N. Virginia)', location: 'Estados Unidos', code: 'us-east-1', services: ['EC2', 'S3', 'RDS', 'VPC'], resources: 48, availability: '99.99%', status: 'Operativa', tone: 'success' },
-  { name: 'EU (Ireland)', location: 'Irlanda', code: 'eu-west-1', services: ['EC2', 'S3', 'CloudFront'], resources: 21, availability: '99.98%', status: 'Operativa', tone: 'success' },
-  { name: 'South America (São Paulo)', location: 'Brasil', code: 'sa-east-1', services: ['S3', 'CloudFront'], resources: 9, availability: '99.95%', status: 'Revisión', tone: 'warning' },
+  { name: 'US East (N. Virginia)', location: 'Estados Unidos', flag: '🇺🇸', code: 'us-east-1', services: ['EC2', 'S3', 'RDS', 'VPC'], resources: 48, availability: '99.99%', status: 'Operativa', tone: 'success' },
+  { name: 'EU (Ireland)', location: 'Irlanda', flag: '🇮🇪', code: 'eu-west-1', services: ['EC2', 'S3', 'CloudFront'], resources: 21, availability: '99.98%', status: 'Operativa', tone: 'success' },
+  { name: 'South America (São Paulo)', location: 'Brasil', flag: '🇧🇷', code: 'sa-east-1', services: ['S3', 'CloudFront'], resources: 9, availability: '99.95%', status: 'Revisión', tone: 'warning' },
 ]
 
 export const monthlyTotal = costItems.reduce((total, item) => total + item.monthly, 0)
