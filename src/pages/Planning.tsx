@@ -67,8 +67,16 @@ export function Planning() {
   const [isCompactViewport, setIsCompactViewport] = useState(() => typeof window !== 'undefined' && window.innerWidth < 1180)
   const [form, setForm] = usePersistentState<SolutionForm>('cloudfoundations.solutionForm', initialForm)
   const [savedProposal, setSavedProposal] = usePersistentState<SolutionForm | null>('cloudfoundations.savedProposal', null)
+  const [proposalHistory, setProposalHistory] = usePersistentState<SolutionForm[]>('cloudfoundations.proposalHistory', [])
   const selectedServices = useMemo(() => services.filter((service) => form.selectedServices.includes(service.id)), [form.selectedServices])
+  const proposalPreview = savedProposal ?? form
+  const proposalServices = useMemo(
+    () => services.filter((service) => proposalPreview.selectedServices.includes(service.id)),
+    [proposalPreview.selectedServices],
+  )
   const selectedRegion = regions.find((region) => region.code === form.region) ?? regions[0]
+  const savedRegion = regions.find((region) => region.code === proposalPreview.region) ?? regions[0]
+  const activeRegion = savedProposal ? savedRegion : selectedRegion
 
   useEffect(() => {
     const syncViewport = () => setIsCompactViewport(window.innerWidth < 1180)
@@ -91,12 +99,30 @@ export function Planning() {
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    setSavedProposal({ ...form, selectedServices: [...form.selectedServices] })
+    const nextProposal = { ...form, selectedServices: [...form.selectedServices] }
+    setSavedProposal(nextProposal)
+    setProposalHistory((current) => [nextProposal, ...current])
   }
 
   const handleReset = () => {
     setForm(initialForm)
     setSavedProposal(null)
+  }
+
+  const getProposalServiceNames = (proposal: SolutionForm) => services
+    .filter((service) => proposal.selectedServices.includes(service.id))
+    .map((service) => service.name)
+
+  const loadProposal = (proposal: SolutionForm) => {
+    setForm(proposal)
+    setSavedProposal(proposal)
+  }
+
+  const deleteProposal = (proposal: SolutionForm) => {
+    setProposalHistory((current) => current.filter((item) => item.solutionName !== proposal.solutionName || item.description !== proposal.description || item.region !== proposal.region))
+    if (savedProposal && savedProposal.solutionName === proposal.solutionName && savedProposal.region === proposal.region && savedProposal.description === proposal.description) {
+      setSavedProposal(null)
+    }
   }
 
   return (
@@ -139,12 +165,67 @@ export function Planning() {
         <div className={`flex w-full min-w-0 max-w-full flex-col gap-5 ${isCompactViewport ? '' : 'sticky top-24'}`}>
           <PlanningCard title={savedProposal ? 'Propuesta registrada' : 'Vista previa'} subtitle={savedProposal ? 'Información guardada de la solución.' : 'Resumen de la configuración actual.'} action={<span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold ${savedProposal ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}><span className="size-1.5 rounded-full bg-current" />{savedProposal ? 'Registrada' : 'Borrador'}</span>}>
             <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-4">
-              <div className="flex items-start gap-3"><div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-600"><Icon name="cloud_queue" className="text-[23px]" /></div><div className="min-w-0"><strong className="block truncate text-base font-bold text-slate-800">{form.solutionName || 'Nueva solución Cloud'}</strong><span className="mt-1 block text-xs text-slate-500">{form.applicationType} · {selectedRegion.name}</span></div></div>
-              <dl className="mt-5 grid grid-cols-2 gap-2"><SummaryItem label="Región" value={form.region} /><SummaryItem label="Usuarios" value={Number(form.users || 0).toLocaleString('en-US')} /><SummaryItem label="Disponibilidad" value={form.availability} /><SummaryItem label="Objetivo" value={form.objective} /></dl>
-              <div className="mt-3 rounded-xl border border-slate-100 bg-white/80 p-3"><span className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">Descripción</span><p className="mt-1.5 text-xs leading-5 text-slate-600">{form.description || 'Añade una descripción para completar la propuesta.'}</p></div>
+              <div className="flex items-start gap-3"><div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-600"><Icon name="cloud_queue" className="text-[23px]" /></div><div className="min-w-0"><strong className="block truncate text-base font-bold text-slate-800">{proposalPreview.solutionName || 'Nueva solución Cloud'}</strong><span className="mt-1 block text-xs text-slate-500">{proposalPreview.applicationType} · {activeRegion.name}</span></div></div>
+              <dl className="mt-5 grid grid-cols-2 gap-2"><SummaryItem label="Región" value={proposalPreview.region} /><SummaryItem label="Usuarios" value={Number(proposalPreview.users || 0).toLocaleString('en-US')} /><SummaryItem label="Disponibilidad" value={proposalPreview.availability} /><SummaryItem label="Objetivo" value={proposalPreview.objective} /></dl>
+              <div className="mt-3 rounded-xl border border-slate-100 bg-white/80 p-3"><span className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">Descripción</span><p className="mt-1.5 text-xs leading-5 text-slate-600">{proposalPreview.description || 'Añade una descripción para completar la propuesta.'}</p></div>
             </div>
-            <div className="mt-5"><div className="flex items-center justify-between"><p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-400">Servicios incluidos</p><span className="text-xs font-bold text-slate-500">{selectedServices.length}</span></div><div className="mt-3 divide-y divide-slate-100">{selectedServices.length > 0 ? selectedServices.map((service) => <div className="flex items-start gap-3 py-3 first:pt-0 last:pb-0" key={service.id}><ServiceIcon tone={service.iconTone} icon={service.icon} /><div className="min-w-0 flex-1"><span className="block text-sm font-bold text-slate-700">{service.name}</span><span className="mt-1 block text-[11px] leading-5 text-slate-500">{service.purpose}</span></div><Icon name="check_circle" className="mt-1 text-[19px] text-emerald-600" /></div>) : <p className="rounded-xl bg-slate-50 p-4 text-xs text-slate-500">Selecciona al menos un servicio para completar la propuesta.</p>}</div></div>
+
+            {savedProposal && (
+              <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-emerald-700">Resumen de la propuesta creada</p>
+                <h4 className="mt-2 text-lg font-black text-emerald-900">{savedProposal.solutionName}</h4>
+                <p className="mt-1 text-sm text-emerald-800">{savedProposal.applicationType} · {activeRegion.name}</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <div className="rounded-xl bg-white/80 p-3"><span className="text-[10px] font-bold uppercase text-emerald-700">Región</span><p className="mt-1 text-sm font-bold text-slate-800">{savedProposal.region}</p></div>
+                  <div className="rounded-xl bg-white/80 p-3"><span className="text-[10px] font-bold uppercase text-emerald-700">Usuarios</span><p className="mt-1 text-sm font-bold text-slate-800">{Number(savedProposal.users || 0).toLocaleString('en-US')}</p></div>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-5"><div className="flex items-center justify-between"><p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-400">Servicios incluidos</p><span className="text-xs font-bold text-slate-500">{proposalServices.length}</span></div><div className="mt-3 divide-y divide-slate-100">{proposalServices.length > 0 ? proposalServices.map((service) => <div className="flex items-start gap-3 py-3 first:pt-0 last:pb-0" key={service.id}><ServiceIcon tone={service.iconTone} icon={service.icon} /><div className="min-w-0 flex-1"><span className="block text-sm font-bold text-slate-700">{service.name}</span><span className="mt-1 block text-[11px] leading-5 text-slate-500">{service.purpose}</span></div><Icon name="check_circle" className="mt-1 text-[19px] text-emerald-600" /></div>) : <p className="rounded-xl bg-slate-50 p-4 text-xs text-slate-500">Selecciona al menos un servicio para completar la propuesta.</p>}</div></div>
           </PlanningCard>
+
+          {proposalHistory.length > 0 && (
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_12px_30px_rgba(15,23,42,0.05)]">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-400">Almacén de propuestas</p>
+                  <h3 className="mt-1 text-base font-bold text-slate-800">Propuestas creadas</h3>
+                </div>
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600">{proposalHistory.length}</span>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {proposalHistory.map((proposal, index) => {
+                  const proposalServiceNames = getProposalServiceNames(proposal)
+                  return (
+                    <div key={`${proposal.solutionName}-${proposal.region}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-bold text-slate-800">{proposal.solutionName}</p>
+                          <p className="mt-1 text-[11px] text-slate-500">{proposal.applicationType} · {proposal.region}</p>
+                        </div>
+                        <button type="button" onClick={() => loadProposal(proposal)} className="rounded-lg bg-blue-600 px-2.5 py-1.5 text-[10px] font-bold text-white hover:bg-blue-700">Cargar</button>
+                      </div>
+
+                      <p className="mt-2 line-clamp-2 text-[11px] leading-5 text-slate-600">{proposal.description}</p>
+
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {proposalServiceNames.length > 0 ? proposalServiceNames.map((serviceName) => (
+                          <span key={`${proposal.solutionName}-${serviceName}`} className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">{serviceName}</span>
+                        )) : <span className="text-[10px] font-bold text-slate-400">Sin servicios seleccionados</span>}
+                      </div>
+
+                      <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-slate-500">
+                        <span>{proposal.selectedServices.length} servicios</span>
+                        <button type="button" onClick={() => deleteProposal(proposal)} className="font-bold text-red-600 hover:text-red-700">Eliminar</button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="rounded-2xl border border-slate-200 bg-slate-900 p-5 text-white shadow-[0_12px_30px_rgba(15,23,42,0.12)]"><div className="flex items-start gap-3"><div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/20 text-blue-300"><Icon name="tips_and_updates" className="text-[21px]" /></div><div><h3 className="text-sm font-bold">Siguiente paso recomendado</h3><p className="mt-1.5 text-xs leading-5 text-slate-300">Después de registrar la propuesta, revisa costos, seguridad y topología antes de pasar a la implementación.</p></div></div></div>
         </div>
