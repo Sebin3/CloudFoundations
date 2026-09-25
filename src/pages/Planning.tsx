@@ -1,5 +1,5 @@
 import { useMemo, type FormEvent, type ReactNode } from 'react'
-import { regions, services } from '../data/cloudData'
+import { costItems, regions, services } from '../data/cloudData'
 import { Icon } from '../components/Icon'
 import { Alert, AlertDescription } from '../components/ui/alert'
 import { Badge } from '../components/ui/badge'
@@ -65,6 +65,10 @@ export function Planning() {
   const [form, setForm] = usePersistentState<SolutionForm>('cloudfoundations.solutionForm', initialForm)
   const [savedProposal, setSavedProposal] = usePersistentState<SolutionForm | null>('cloudfoundations.savedProposal', null)
   const [proposalHistory, setProposalHistory] = usePersistentState<SolutionForm[]>('cloudfoundations.proposalHistory', [])
+  const [, setCostServices] = usePersistentState<string[]>('cloudfoundations.costServices', [])
+  const [, setCostQuantities] = usePersistentState<Record<string, number>>('cloudfoundations.costQuantities', {})
+  const [, setUsageHours] = usePersistentState<number>('cloudfoundations.usageHours', 720)
+  const [, setCostPlanSignature] = usePersistentState('cloudfoundations.costPlanSignature', '')
   const selectedServices = useMemo(() => services.filter((service) => form.selectedServices.includes(service.id)), [form.selectedServices])
   const proposalPreview = savedProposal ?? form
   const proposalServices = useMemo(
@@ -90,8 +94,13 @@ export function Planning() {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const nextProposal = { ...form, selectedServices: [...form.selectedServices] }
+    const plannedCostItems = costItems.filter((item) => nextProposal.selectedServices.includes(item.serviceId))
     setSavedProposal(nextProposal)
     setProposalHistory((current) => [nextProposal, ...current])
+    setCostServices(plannedCostItems.map((item) => item.serviceId))
+    setCostQuantities(Object.fromEntries(plannedCostItems.map((item) => [item.serviceId, 1])))
+    setUsageHours(720)
+    setCostPlanSignature(JSON.stringify(nextProposal))
   }
 
   const handleReset = () => {

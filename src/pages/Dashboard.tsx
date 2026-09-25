@@ -1,12 +1,12 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { costDistribution, costItems, costTrend, regions, securityChecks, services } from '../data/cloudData'
+import { costItems, regions, securityChecks, services } from '../data/cloudData'
 import { Icon } from '../components/Icon'
 import { Button } from '../components/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { useSelectedRegion } from '../context/selectedRegion'
 import { usePersistentState } from '../hooks/usePersistentState'
+import { savedProposalStorageKey, type SolutionPlan } from '../types/planning'
 
 type DashboardTone = 'blue' | 'green' | 'amber' | 'purple'
 type DashboardStatusTone = 'success' | 'warning' | 'danger' | 'info' | 'neutral'
@@ -24,6 +24,14 @@ const statusToneClasses: Record<DashboardStatusTone, string> = {
   danger: 'bg-red-50 text-red-700',
   info: 'bg-blue-50 text-blue-700',
   neutral: 'bg-slate-100 text-slate-600',
+}
+
+const costCategoryColors: Record<string, string> = {
+  Compute: '#2563eb',
+  Database: '#f59e0b',
+  Storage: '#16a34a',
+  Delivery: '#7c3aed',
+  Networking: '#64748b',
 }
 
 function DashboardPanel({ title, subtitle, action, children, className = '' }: { title: string; subtitle?: string; action?: ReactNode; children: ReactNode; className?: string }) {
@@ -93,27 +101,30 @@ function securityIconClass(tone: DashboardStatusTone) {
 export function Dashboard() {
   const navigate = useNavigate()
   const { selectedRegion: selectedRegionCode } = useSelectedRegion()
-  const [range, setRange] = useState('6')
+  const [savedProposal] = usePersistentState<SolutionPlan | null>(savedProposalStorageKey, null)
   const [usageHours] = usePersistentState<number>('cloudfoundations.usageHours', 720)
-  const [selectedCostServices] = usePersistentState<string[]>('cloudfoundations.costServices', costItems.map((item) => item.service))
-  const [quantities] = usePersistentState<Record<string, number>>('cloudfoundations.costQuantities', Object.fromEntries(costItems.map((item) => [item.service, item.quantity])))
-  const calculatedCostItems = useMemo(() => costItems.filter((item) => selectedCostServices.includes(item.service)).map((item) => {
-    const quantity = quantities[item.service] ?? item.quantity
+  const [selectedCostServices] = usePersistentState<string[]>('cloudfoundations.costServices', [])
+  const [quantities] = usePersistentState<Record<string, number>>('cloudfoundations.costQuantities', {})
+  const planServiceIds = useMemo(() => savedProposal?.selectedServices ?? [], [savedProposal])
+  const calculatedCostItems = useMemo(() => costItems.filter((item) => planServiceIds.includes(item.serviceId) && selectedCostServices.includes(item.serviceId)).map((item) => {
+    const quantity = quantities[item.serviceId] ?? 1
     const unitHourlyCost = item.monthly / (item.quantity * item.hours)
     return { ...item, monthly: quantity * usageHours * unitHourlyCost }
-  }), [quantities, selectedCostServices, usageHours])
+  }), [planServiceIds, quantities, selectedCostServices, usageHours])
   const dashboardMonthlyTotal = calculatedCostItems.reduce((total, item) => total + item.monthly, 0)
   const annualTotal = dashboardMonthlyTotal * 12
-  const dashboardCostDistribution = calculatedCostItems.map((item, index) => ({ name: item.category, value: item.monthly, fill: costDistribution[index]?.fill ?? '#64748b' }))
-  const visibleCostTrend = range === '1' ? costTrend.slice(-1) : range === '3' ? costTrend.slice(-3) : costTrend
-  const selectedRegion = regions.find((region) => region.code === selectedRegionCode) ?? regions[0]
-  const usedServices = services.filter((service) => service.status === 'En uso')
-  const totalResources = regions.reduce((total, region) => total + region.resources, 0)
+  const dashboardCostDistribution = calculatedCostItems.map((item) => ({ name: item.category, value: item.monthly, fill: costCategoryColors[item.category] ?? '#64748b' }))
+  const dashboardTrend = savedProposal && calculatedCostItems.length > 0 ? [{ month: 'Actual', cost: Math.round(dashboardMonthlyTotal) }] : []
+  const selectedRegion = regions.find((region) => region.code === (savedProposal?.region ?? selectedRegionCode)) ?? regions[0]
+  const usedServices = services.filter((service) => planServiceIds.includes(service.id))
+  const totalResources = calculatedCostItems.reduce((total, item) => total + item.quantity, 0) + usedServices.filter((service) => !costItems.some((item) => item.serviceId === service.id)).length
   const correctSecurityChecks = securityChecks.filter((check) => check.tone === 'success').length
   const securityScore = Math.round((securityChecks.reduce((score, check) => score + (check.tone === 'success' ? 1 : check.tone === 'warning' ? 0.8 : 0), 0) / securityChecks.length) * 100)
   const securityLabel = securityScore >= 90 ? 'Protección alta' : securityScore >= 70 ? 'Requiere seguimiento' : 'Atención prioritaria'
   const securityTone: DashboardStatusTone = securityScore >= 90 ? 'success' : securityScore >= 70 ? 'warning' : 'danger'
-  const architectureStatus = selectedRegion.tone === 'success' ? 'Operativa' : 'Revisión'
+  const architectureStatus = savedProposal ? (selectedRegion.tone === 'success' ? 'Operativa' : 'Revisión') : 'Sin plan'
+  const networkConfigured = planServiceIds.includes('vpc')
+  const continuityConfigured = savedProposal?.availability.includes('Alta') ?? false
 
   return (
     <div className="flex flex-col gap-6">
@@ -130,24 +141,22 @@ export function Dashboard() {
       </header>
 
       <section aria-label="Indicadores principales" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <MetricCard label="Costo mensual estimado" value={`$${dashboardMonthlyTotal.toLocaleString('en-US')}`} detail="Proyección según la configuración actual" icon="payments" tone="amber" trend="5.2%" />
-        <MetricCard label="Costo anual estimado" value={`$${annualTotal.toLocaleString('en-US')}`} detail="Proyección de inversión a 12 meses" icon="calendar_month" tone="blue" compact />
-        <MetricCard label="Región seleccionada" value={selectedRegion.code} detail={`${selectedRegion.name} · ${selectedRegion.location}`} icon="location_on" tone="blue" compact />
-        <MetricCard label="Servicios utilizados" value={`${usedServices.length}`} detail="Componentes activos en la solución" icon="apps" tone="purple" compact />
-        <MetricCard label="Recursos Cloud" value={`${totalResources}`} detail={`Distribuidos en ${regions.length} regiones activas`} icon="deployed_code" tone="purple" trend="8.4%" />
+        <MetricCard label="Costo mensual estimado" value={savedProposal ? `$${dashboardMonthlyTotal.toLocaleString('en-US')}` : '—'} detail={savedProposal ? 'Según la planificación registrada' : 'Crea una planificación para estimar'} icon="payments" tone="amber" />
+        <MetricCard label="Costo anual estimado" value={savedProposal ? `$${annualTotal.toLocaleString('en-US')}` : '—'} detail={savedProposal ? 'Proyección de inversión a 12 meses' : 'Sin datos para proyectar'} icon="calendar_month" tone="blue" compact />
+        <MetricCard label="Región seleccionada" value={savedProposal ? selectedRegion.code : '—'} detail={savedProposal ? `${selectedRegion.name} · ${selectedRegion.location}` : 'Se toma desde la planificación'} icon="location_on" tone="blue" compact />
+        <MetricCard label="Servicios utilizados" value={savedProposal ? `${usedServices.length}` : '—'} detail={savedProposal ? 'Componentes de la planificación' : 'Sin servicios registrados'} icon="apps" tone="purple" compact />
+        <MetricCard label="Recursos Cloud" value={savedProposal ? `${totalResources}` : '—'} detail={savedProposal ? 'Recursos estimables del plan actual' : 'Se calcula desde Costos'} icon="deployed_code" tone="purple" />
         <MetricCard label="Estado de seguridad" value={`${securityScore}%`} detail={`${correctSecurityChecks} de ${securityChecks.length} correctos · ${securityChecks.length - correctSecurityChecks} requieren atención`} icon="shield_lock" tone={securityTone === 'success' ? 'green' : 'amber'} />
-        <MetricCard label="Estado de arquitectura" value={architectureStatus} detail={`SLA ${selectedRegion.availability} · ${selectedRegion.status.toLowerCase()}`} icon="account_tree" tone={architectureStatus === 'Operativa' ? 'green' : 'amber'} compact />
+        <MetricCard label="Estado de arquitectura" value={architectureStatus} detail={savedProposal ? `SLA ${selectedRegion.availability} · ${selectedRegion.status.toLowerCase()}` : 'Registra una propuesta para revisar el estado'} icon="account_tree" tone={architectureStatus === 'Operativa' ? 'green' : 'amber'} compact />
       </section>
 
       <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.85fr)]">
-        <DashboardPanel title="Evolución de costos" subtitle="Estimación mensual en USD" action={<Select value={range} onValueChange={setRange}><SelectTrigger size="sm" className="w-[150px] border-slate-200 bg-white text-xs font-bold text-slate-500"><SelectValue /></SelectTrigger><SelectContent align="end"><SelectItem value="6">Últimos 6 meses</SelectItem><SelectItem value="3">Últimos 3 meses</SelectItem><SelectItem value="1">Último mes</SelectItem></SelectContent></Select>}>
+        <DashboardPanel title="Costo estimado del plan" subtitle="Estimación mensual en USD · sin historial inventado">
           <div className="mb-3 flex items-center justify-between gap-4 text-xs text-slate-500">
-            <span className="inline-flex items-center gap-2"><i className="size-2 rounded-full bg-blue-600" />Costo estimado</span>
-            <span className="text-slate-400">Actualizado hace 2 horas</span>
+            <span className="inline-flex items-center gap-2"><i className="size-2 rounded-full bg-blue-600" />Estimación actual</span>
+            <span className="text-slate-400">Sin datos históricos</span>
           </div>
-          <div className="h-[250px] w-full sm:h-[280px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={visibleCostTrend} margin={{ top: 12, right: 8, left: -20, bottom: 0 }}>
+          {dashboardTrend.length > 0 ? <div className="h-[250px] w-full sm:h-[280px]"><ResponsiveContainer width="100%" height="100%"><AreaChart data={dashboardTrend} margin={{ top: 12, right: 8, left: -20, bottom: 0 }}>
                 <defs><linearGradient id="dashboardCostGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#2563eb" stopOpacity={0.18} /><stop offset="100%" stopColor="#2563eb" stopOpacity={0} /></linearGradient></defs>
                 <CartesianGrid stroke="#e2e8f0" vertical={false} strokeDasharray="4 4" />
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} dy={10} />
@@ -155,8 +164,7 @@ export function Dashboard() {
                 <Tooltip contentStyle={{ border: '1px solid #e2e8f0', borderRadius: 12, boxShadow: '0 10px 30px rgba(15, 23, 42, 0.1)', fontFamily: 'DM Sans' }} formatter={(value) => [`$${value}`, 'Costo']} />
                 <Area type="monotone" dataKey="cost" stroke="#2563eb" strokeWidth={3} fill="url(#dashboardCostGradient)" activeDot={{ r: 5, fill: '#2563eb', stroke: '#fff', strokeWidth: 3 }} />
               </AreaChart>
-            </ResponsiveContainer>
-          </div>
+            </ResponsiveContainer></div> : <div className="flex min-h-[250px] flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-6 text-center sm:min-h-[280px]"><Icon name="bar_chart" className="text-[30px] text-slate-300" /><p className="mt-3 text-sm font-bold text-slate-700">El gráfico se activará con tu planificación</p><p className="mt-1 max-w-sm text-xs leading-5 text-slate-500">Aquí aparecerá el costo mensual calculado desde los servicios y cantidades que registres.</p></div>}
         </DashboardPanel>
 
         <DashboardPanel title="Resumen de seguridad" subtitle="Última revisión: hoy, 09:42" action={<Button type="button" variant="link" size="sm" onClick={() => navigate('/security')} className="h-auto p-0 text-xs font-bold text-blue-600">Ver detalles <Icon name="arrow_forward" className="text-[16px]" /></Button>}>
@@ -182,15 +190,15 @@ export function Dashboard() {
         </DashboardPanel>
 
         <DashboardPanel title="Servicios principales" subtitle="Componentes activos en la solución" action={<Button type="button" variant="link" size="sm" onClick={() => navigate('/services')} className="h-auto p-0 text-xs font-bold text-blue-600">Ver catálogo <Icon name="arrow_forward" className="text-[16px]" /></Button>}>
-          <div>{usedServices.map((service) => <ServiceRow service={service} key={service.id} />)}</div>
+          {usedServices.length > 0 ? <div>{usedServices.map((service) => <ServiceRow service={service} key={service.id} />)}</div> : <div className="flex min-h-[245px] flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-6 text-center"><Icon name="apps" className="text-[28px] text-slate-300" /><p className="mt-3 text-sm font-bold text-slate-700">Sin servicios en la planificación</p><p className="mt-1 max-w-xs text-xs leading-5 text-slate-500">Registra una propuesta para ver aquí los componentes de tu solución.</p></div>}
         </DashboardPanel>
       </div>
 
-      <DashboardPanel title="Estado de la arquitectura" subtitle="Resumen operativo de la solución Cloud" action={<DashboardStatus label="Operativa" tone="success" />}>
+      <DashboardPanel title="Estado de la arquitectura" subtitle="Resumen operativo de la solución Cloud" action={<DashboardStatus label={architectureStatus} tone={architectureStatus === 'Operativa' ? 'success' : 'warning'} />}>
         <div className="grid gap-3 sm:grid-cols-3">
-          <div className="flex items-center gap-3 rounded-xl border border-emerald-100 bg-emerald-50/70 p-4"><div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600"><Icon name="monitor_heart" className="text-[20px]" /></div><div><strong className="block text-sm font-bold text-slate-800">Disponibilidad</strong><span className="text-xs text-slate-500">99.98% SLA cumplido</span></div></div>
-          <div className="flex items-center gap-3 rounded-xl border border-blue-100 bg-blue-50/70 p-4"><div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-600"><Icon name="hub" className="text-[20px]" /></div><div><strong className="block text-sm font-bold text-slate-800">Red operativa</strong><span className="text-xs text-slate-500">VPC y rutas configuradas</span></div></div>
-          <div className="flex items-center gap-3 rounded-xl border border-amber-100 bg-amber-50/70 p-4"><div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600"><Icon name="backup" className="text-[20px]" /></div><div><strong className="block text-sm font-bold text-slate-800">Continuidad</strong><span className="text-xs text-slate-500">1 recomendación pendiente</span></div></div>
+          <div className="flex items-center gap-3 rounded-xl border border-emerald-100 bg-emerald-50/70 p-4"><div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600"><Icon name="monitor_heart" className="text-[20px]" /></div><div><strong className="block text-sm font-bold text-slate-800">Disponibilidad</strong><span className="text-xs text-slate-500">{savedProposal ? savedProposal.availability : 'Sin disponibilidad definida'}</span></div></div>
+          <div className={`flex items-center gap-3 rounded-xl border p-4 ${networkConfigured ? 'border-blue-100 bg-blue-50/70' : 'border-slate-200 bg-slate-50/70'}`}><div className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${networkConfigured ? 'bg-blue-100 text-blue-600' : 'bg-slate-200 text-slate-500'}`}><Icon name="hub" className="text-[20px]" /></div><div><strong className="block text-sm font-bold text-slate-800">Red operativa</strong><span className="text-xs text-slate-500">{networkConfigured ? 'VPC incluida en el plan' : 'VPC no incluida'}</span></div></div>
+          <div className={`flex items-center gap-3 rounded-xl border p-4 ${continuityConfigured ? 'border-emerald-100 bg-emerald-50/70' : 'border-amber-100 bg-amber-50/70'}`}><div className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${continuityConfigured ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}><Icon name="backup" className="text-[20px]" /></div><div><strong className="block text-sm font-bold text-slate-800">Continuidad</strong><span className="text-xs text-slate-500">{continuityConfigured ? 'Disponibilidad alta solicitada' : 'Requiere revisión del plan'}</span></div></div>
         </div>
       </DashboardPanel>
 
@@ -200,10 +208,10 @@ export function Dashboard() {
           <Button type="button" variant="outline" size="lg" onClick={() => navigate('/services')} className="self-start rounded-xl text-xs font-bold text-slate-600 sm:self-auto">Ver todos <Icon name="arrow_forward" className="text-[16px]" /></Button>
         </div>
         <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {usedServices.map((service) => {
+          {usedServices.length > 0 ? usedServices.map((service) => {
             const iconTone = service.iconTone === 'warning' ? 'bg-amber-50 text-amber-600' : service.iconTone === 'success' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'
             return <article className="group flex min-h-[190px] flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.04)] transition duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-[0_12px_30px_rgba(37,99,235,0.09)]" key={service.id}><div className="flex items-start justify-between gap-3"><div className={`flex size-11 items-center justify-center rounded-xl ${iconTone}`}><Icon name={service.icon} className="text-[21px]" /></div><DashboardStatus label={service.status} tone={service.status === 'En uso' ? 'success' : 'neutral'} /></div><h3 className="mt-4 text-base font-bold text-slate-800">{service.name}</h3><span className="mt-1 text-xs text-slate-400">{service.category}</span><p className="mt-3 flex-1 text-sm leading-5 text-slate-500">{service.description}</p><div className="mt-4 border-t border-slate-100 pt-3"><span className="block text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">Uso principal</span><strong className="mt-1 block text-xs font-semibold text-slate-600">{service.purpose}</strong></div></article>
-          })}
+          }) : <div className="col-span-full flex min-h-[190px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-6 text-center"><Icon name="add_circle" className="text-[28px] text-slate-300" /><p className="mt-3 text-sm font-bold text-slate-700">Aún no hay una solución activa</p><p className="mt-1 max-w-md text-xs leading-5 text-slate-500">Los servicios seleccionados en Planificación aparecerán aquí con su estado de uso.</p></div>}
         </div>
       </section>
     </div>

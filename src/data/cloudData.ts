@@ -88,23 +88,6 @@ export const costItems: CostItem[] = [
   { serviceId: 'route53', service: 'Route 53', category: 'Networking', quantity: 1, hours: 720, monthly: 16, annual: 192, icon: 'language', iconTone: 'neutral' },
 ]
 
-export const costTrend = [
-  { month: 'Abr', cost: 286 },
-  { month: 'May', cost: 302 },
-  { month: 'Jun', cost: 318 },
-  { month: 'Jul', cost: 341 },
-  { month: 'Ago', cost: 352 },
-  { month: 'Sep', cost: 369 },
-]
-
-export const costDistribution = [
-  { name: 'Compute', value: 184, fill: '#2563eb' },
-  { name: 'Database', value: 96, fill: '#f59e0b' },
-  { name: 'Storage', value: 42, fill: '#16a34a' },
-  { name: 'Delivery', value: 31, fill: '#7c3aed' },
-  { name: 'Networking', value: 16, fill: '#64748b' },
-]
-
 export const securityChecks: SecurityCheck[] = [
   { label: 'Modelo de responsabilidad compartida', detail: 'Controles Cloud configurados', status: 'Correcto', tone: 'success', icon: 'verified_user' },
   { label: 'Identidades y accesos IAM', detail: 'Roles con mínimo privilegio', status: 'Correcto', tone: 'success', icon: 'manage_accounts' },
@@ -118,5 +101,3 @@ export const regions: Region[] = [
   { name: 'EU (Ireland)', location: 'Irlanda', flag: '🇮🇪', code: 'eu-west-1', services: ['EC2', 'S3', 'CloudFront'], resources: 21, availability: '99.98%', status: 'Operativa', tone: 'success' },
   { name: 'South America (São Paulo)', location: 'Brasil', flag: '🇧🇷', code: 'sa-east-1', services: ['S3', 'CloudFront'], resources: 9, availability: '99.95%', status: 'Revisión', tone: 'warning' },
 ]
-
-export const monthlyTotal = costItems.reduce((total, item) => total + item.monthly, 0)
