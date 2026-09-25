@@ -1,6 +1,12 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useMemo, type FormEvent, type ReactNode } from 'react'
 import { regions, services } from '../data/cloudData'
 import { Icon } from '../components/Icon'
+import { Alert, AlertDescription } from '../components/ui/alert'
+import { Badge } from '../components/ui/badge'
+import { Button } from '../components/ui/button'
+import { Input } from '../components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
+import { Textarea } from '../components/ui/textarea'
 import { usePersistentState } from '../hooks/usePersistentState'
 
 type SolutionForm = {
@@ -25,7 +31,7 @@ const initialForm: SolutionForm = {
   selectedServices: [],
 }
 
-const controlClasses = 'w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-100'
+const controlClasses = 'h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-100'
 
 function PlanningCard({ title, subtitle, action, children, className = '' }: { title: string; subtitle?: string; action?: ReactNode; children: ReactNode; className?: string }) {
   return (
@@ -64,7 +70,6 @@ function SummaryItem({ label, value }: { label: string; value: string }) {
 }
 
 export function Planning() {
-  const [isCompactViewport, setIsCompactViewport] = useState(() => typeof window !== 'undefined' && window.innerWidth < 1180)
   const [form, setForm] = usePersistentState<SolutionForm>('cloudfoundations.solutionForm', initialForm)
   const [savedProposal, setSavedProposal] = usePersistentState<SolutionForm | null>('cloudfoundations.savedProposal', null)
   const [proposalHistory, setProposalHistory] = usePersistentState<SolutionForm[]>('cloudfoundations.proposalHistory', [])
@@ -77,13 +82,6 @@ export function Planning() {
   const selectedRegion = regions.find((region) => region.code === form.region) ?? regions[0]
   const savedRegion = regions.find((region) => region.code === proposalPreview.region) ?? regions[0]
   const activeRegion = savedProposal ? savedRegion : selectedRegion
-
-  useEffect(() => {
-    const syncViewport = () => setIsCompactViewport(window.innerWidth < 1180)
-    window.addEventListener('resize', syncViewport)
-    syncViewport()
-    return () => window.removeEventListener('resize', syncViewport)
-  }, [])
 
   const updateField = <K extends keyof SolutionForm>(field: K, value: SolutionForm[K]) => {
     setForm((current) => ({ ...current, [field]: value }))
@@ -133,19 +131,69 @@ export function Planning() {
         <p className="max-w-3xl text-sm leading-6 text-slate-500">Registra los objetivos, el contexto de negocio y los componentes principales de tu propuesta de arquitectura.</p>
       </header>
 
-      {savedProposal && <div role="status" className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800 shadow-sm"><Icon name="check_circle" className="mt-0.5 text-[21px] text-emerald-600" /><div><strong className="block text-sm">Propuesta registrada correctamente</strong><span className="mt-1 block text-xs text-emerald-700">La configuración quedó disponible en el resumen de la derecha.</span></div></div>}
+      {savedProposal && <Alert role="status" className="rounded-2xl border-emerald-200 bg-emerald-50 p-4 text-emerald-800 shadow-sm"><Icon name="check_circle" className="text-[21px] text-emerald-600" /><AlertDescription><strong className="block text-sm text-emerald-800">Propuesta registrada correctamente</strong><span className="mt-1 block text-xs text-emerald-700">La configuración quedó disponible en el resumen de la derecha.</span></AlertDescription></Alert>}
 
-      <div className={`grid min-w-0 items-start gap-5 ${isCompactViewport ? 'grid-cols-1' : 'grid-cols-2'}`}>
+      <div className="grid min-w-0 items-start gap-5 min-[1180px]:grid-cols-2">
         <PlanningCard title="Información de la solución" subtitle="Completa los datos generales del proyecto.">
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div className="grid gap-5 md:grid-cols-2">
-              <div className="md:col-span-2"><FormField label="Nombre de la solución" id="solution-name"><input id="solution-name" required value={form.solutionName} onChange={(event) => updateField('solutionName', event.target.value)} placeholder="Ej. Plataforma e-commerce Nova" className={controlClasses} /></FormField></div>
-              <FormField label="Tipo de aplicación" id="application-type"><select id="application-type" required value={form.applicationType} onChange={(event) => updateField('applicationType', event.target.value)} className={controlClasses}><option>Web empresarial</option><option>API / Backend</option><option>Aplicación móvil</option><option>Procesamiento de datos</option></select></FormField>
-              <FormField label="Región seleccionada" id="region"><select id="region" required value={form.region} onChange={(event) => updateField('region', event.target.value)} className={controlClasses}>{regions.map((region) => <option value={region.code} key={region.code}>{region.code} · {region.name}</option>)}</select></FormField>
-              <FormField label="Número estimado de usuarios" id="users" hint="Usuarios activos / mes"><input id="users" required min="1" type="number" value={form.users} onChange={(event) => updateField('users', event.target.value)} className={controlClasses} /></FormField>
-              <FormField label="Nivel de disponibilidad requerido" id="availability"><select id="availability" required value={form.availability} onChange={(event) => updateField('availability', event.target.value)} className={controlClasses}><option>Estándar · 99%</option><option>Alta · 99.9%</option><option>Crítica · 99.99%</option></select></FormField>
-              <div className="md:col-span-2"><FormField label="Descripción" id="description"><textarea id="description" required value={form.description} onChange={(event) => updateField('description', event.target.value)} placeholder="Describe el contexto, las necesidades y el alcance de la solución." className={`${controlClasses} min-h-32 resize-y leading-6`} /></FormField></div>
-              <div className="md:col-span-2"><FormField label="Objetivo de la migración" id="objective"><select id="objective" required value={form.objective} onChange={(event) => updateField('objective', event.target.value)} className={controlClasses}><option>Modernización</option><option>Reducción de costos</option><option>Continuidad operativa</option><option>Escalabilidad</option></select></FormField></div>
+              <div className="md:col-span-2">
+                <FormField label="Nombre de la solución" id="solution-name">
+                  <Input id="solution-name" required value={form.solutionName} onChange={(event) => updateField('solutionName', event.target.value)} placeholder="Ej. Plataforma e-commerce Nova" className={controlClasses} />
+                </FormField>
+              </div>
+
+              <FormField label="Tipo de aplicación" id="application-type">
+                <Select value={form.applicationType} onValueChange={(value) => updateField('applicationType', value)}>
+                  <SelectTrigger id="application-type" className={`${controlClasses} justify-between`}><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Web empresarial">Web empresarial</SelectItem>
+                    <SelectItem value="API / Backend">API / Backend</SelectItem>
+                    <SelectItem value="Aplicación móvil">Aplicación móvil</SelectItem>
+                    <SelectItem value="Procesamiento de datos">Procesamiento de datos</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormField>
+
+              <div className="md:col-span-2">
+                <FormField label="Descripción" id="description">
+                  <Textarea id="description" required value={form.description} onChange={(event) => updateField('description', event.target.value)} placeholder="Describe el contexto, las necesidades y el alcance de la solución." className={`${controlClasses} min-h-32 resize-y py-3 leading-6`} />
+                </FormField>
+              </div>
+
+              <FormField label="Región seleccionada" id="region">
+                <Select value={form.region} onValueChange={(value) => updateField('region', value)}>
+                  <SelectTrigger id="region" className={`${controlClasses} justify-between`}><SelectValue /></SelectTrigger>
+                  <SelectContent>{regions.map((region) => <SelectItem value={region.code} key={region.code}>{region.code} · {region.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </FormField>
+
+              <FormField label="Número estimado de usuarios" id="users" hint="Usuarios activos / mes">
+                <Input id="users" required min="1" type="number" value={form.users} onChange={(event) => updateField('users', event.target.value)} className={controlClasses} />
+              </FormField>
+
+              <FormField label="Nivel de disponibilidad requerido" id="availability">
+                <Select value={form.availability} onValueChange={(value) => updateField('availability', value)}>
+                  <SelectTrigger id="availability" className={`${controlClasses} justify-between`}><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Estándar · 99%">Estándar · 99%</SelectItem>
+                    <SelectItem value="Alta · 99.9%">Alta · 99.9%</SelectItem>
+                    <SelectItem value="Crítica · 99.99%">Crítica · 99.99%</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormField>
+
+              <FormField label="Objetivo de la migración" id="objective">
+                <Select value={form.objective} onValueChange={(value) => updateField('objective', value)}>
+                  <SelectTrigger id="objective" className={`${controlClasses} justify-between`}><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Modernización">Modernización</SelectItem>
+                    <SelectItem value="Reducción de costos">Reducción de costos</SelectItem>
+                    <SelectItem value="Continuidad operativa">Continuidad operativa</SelectItem>
+                    <SelectItem value="Escalabilidad">Escalabilidad</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormField>
             </div>
 
             <div className="border-t border-slate-100 pt-6">
@@ -158,29 +206,17 @@ export function Planning() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between"><span className="text-xs text-slate-400">Los datos se guardan como propuesta local.</span><div className="flex flex-col-reverse gap-2 sm:flex-row"><button type="button" onClick={handleReset} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50">Limpiar</button><button type="submit" disabled={selectedServices.length === 0} className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-600 bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-[0_8px_18px_rgba(37,99,235,0.16)] transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-300"> <Icon name="save" className="text-[18px]" />Guardar propuesta</button></div></div>
+            <div className="flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between"><span className="text-xs text-slate-400">Los datos se guardan como propuesta local.</span><div className="flex flex-col-reverse gap-2 sm:flex-row"><Button type="button" size="lg" variant="outline" onClick={handleReset} className="text-sm font-bold">Limpiar</Button><Button type="submit" size="lg" disabled={selectedServices.length === 0} className="bg-blue-600 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed"><Icon name="save" className="text-[18px]" />Guardar propuesta</Button></div></div>
           </form>
         </PlanningCard>
 
-        <div className={`flex w-full min-w-0 max-w-full flex-col gap-5 ${isCompactViewport ? '' : 'sticky top-24'}`}>
-          <PlanningCard title={savedProposal ? 'Propuesta registrada' : 'Vista previa'} subtitle={savedProposal ? 'Información guardada de la solución.' : 'Resumen de la configuración actual.'} action={<span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold ${savedProposal ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}><span className="size-1.5 rounded-full bg-current" />{savedProposal ? 'Registrada' : 'Borrador'}</span>}>
+        <div className="flex w-full min-w-0 max-w-full flex-col gap-5 min-[1180px]:sticky min-[1180px]:top-24">
+          <PlanningCard title={savedProposal ? 'Propuesta registrada' : 'Vista previa'} subtitle={savedProposal ? 'Información guardada de la solución.' : 'Resumen de la configuración actual.'} action={<Badge variant="outline" className={`border-0 px-2.5 py-1 text-[11px] ${savedProposal ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}><span className="size-1.5 rounded-full bg-current" />{savedProposal ? 'Registrada' : 'Borrador'}</Badge>}>
             <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-4">
               <div className="flex items-start gap-3"><div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-600"><Icon name="cloud_queue" className="text-[23px]" /></div><div className="min-w-0"><strong className="block truncate text-base font-bold text-slate-800">{proposalPreview.solutionName || 'Nueva solución Cloud'}</strong><span className="mt-1 block text-xs text-slate-500">{proposalPreview.applicationType} · {activeRegion.name}</span></div></div>
               <dl className="mt-5 grid grid-cols-2 gap-2"><SummaryItem label="Región" value={proposalPreview.region} /><SummaryItem label="Usuarios" value={Number(proposalPreview.users || 0).toLocaleString('en-US')} /><SummaryItem label="Disponibilidad" value={proposalPreview.availability} /><SummaryItem label="Objetivo" value={proposalPreview.objective} /></dl>
               <div className="mt-3 rounded-xl border border-slate-100 bg-white/80 p-3"><span className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">Descripción</span><p className="mt-1.5 text-xs leading-5 text-slate-600">{proposalPreview.description || 'Añade una descripción para completar la propuesta.'}</p></div>
             </div>
-
-            {savedProposal && (
-              <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-                <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-emerald-700">Resumen de la propuesta creada</p>
-                <h4 className="mt-2 text-lg font-black text-emerald-900">{savedProposal.solutionName}</h4>
-                <p className="mt-1 text-sm text-emerald-800">{savedProposal.applicationType} · {activeRegion.name}</p>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <div className="rounded-xl bg-white/80 p-3"><span className="text-[10px] font-bold uppercase text-emerald-700">Región</span><p className="mt-1 text-sm font-bold text-slate-800">{savedProposal.region}</p></div>
-                  <div className="rounded-xl bg-white/80 p-3"><span className="text-[10px] font-bold uppercase text-emerald-700">Usuarios</span><p className="mt-1 text-sm font-bold text-slate-800">{Number(savedProposal.users || 0).toLocaleString('en-US')}</p></div>
-                </div>
-              </div>
-            )}
 
             <div className="mt-5"><div className="flex items-center justify-between"><p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-400">Servicios incluidos</p><span className="text-xs font-bold text-slate-500">{proposalServices.length}</span></div><div className="mt-3 divide-y divide-slate-100">{proposalServices.length > 0 ? proposalServices.map((service) => <div className="flex items-start gap-3 py-3 first:pt-0 last:pb-0" key={service.id}><ServiceIcon tone={service.iconTone} icon={service.icon} /><div className="min-w-0 flex-1"><span className="block text-sm font-bold text-slate-700">{service.name}</span><span className="mt-1 block text-[11px] leading-5 text-slate-500">{service.purpose}</span></div><Icon name="check_circle" className="mt-1 text-[19px] text-emerald-600" /></div>) : <p className="rounded-xl bg-slate-50 p-4 text-xs text-slate-500">Selecciona al menos un servicio para completar la propuesta.</p>}</div></div>
           </PlanningCard>
@@ -205,7 +241,7 @@ export function Planning() {
                           <p className="truncate text-sm font-bold text-slate-800">{proposal.solutionName}</p>
                           <p className="mt-1 text-[11px] text-slate-500">{proposal.applicationType} · {proposal.region}</p>
                         </div>
-                        <button type="button" onClick={() => loadProposal(proposal)} className="rounded-lg bg-blue-600 px-2.5 py-1.5 text-[10px] font-bold text-white hover:bg-blue-700">Cargar</button>
+                        <Button type="button" size="xs" onClick={() => loadProposal(proposal)} className="rounded-lg bg-blue-600 px-2.5 py-1.5 text-[10px] font-bold text-white hover:bg-blue-700">Cargar</Button>
                       </div>
 
                       <p className="mt-2 line-clamp-2 text-[11px] leading-5 text-slate-600">{proposal.description}</p>
@@ -218,7 +254,7 @@ export function Planning() {
 
                       <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-slate-500">
                         <span>{proposal.selectedServices.length} servicios</span>
-                        <button type="button" onClick={() => deleteProposal(proposal)} className="font-bold text-red-600 hover:text-red-700">Eliminar</button>
+                        <Button type="button" variant="link" size="xs" onClick={() => deleteProposal(proposal)} className="h-auto p-0 font-bold text-red-600 hover:text-red-700">Eliminar</Button>
                       </div>
                     </div>
                   )
@@ -227,7 +263,6 @@ export function Planning() {
             </div>
           )}
 
-          <div className="rounded-2xl border border-slate-200 bg-slate-900 p-5 text-white shadow-[0_12px_30px_rgba(15,23,42,0.12)]"><div className="flex items-start gap-3"><div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/20 text-blue-300"><Icon name="tips_and_updates" className="text-[21px]" /></div><div><h3 className="text-sm font-bold">Siguiente paso recomendado</h3><p className="mt-1.5 text-xs leading-5 text-slate-300">Después de registrar la propuesta, revisa costos, seguridad y topología antes de pasar a la implementación.</p></div></div></div>
         </div>
       </div>
     </div>

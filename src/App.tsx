@@ -1,14 +1,16 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { DashboardLayout } from './layout/DashboardLayout'
-import { Costs } from './pages/Costs'
-import { Dashboard } from './pages/Dashboard'
-import { Infrastructure } from './pages/Infrastructure'
-import { Network } from './pages/Network'
-import { Planning } from './pages/Planning'
-import { Security } from './pages/Security'
-import { Services } from './pages/Services'
 import type { RouteKey } from './types/cloud'
 import './App.css'
+
+const Dashboard = lazy(() => import('./pages/Dashboard').then(({ Dashboard }) => ({ default: Dashboard })))
+const Planning = lazy(() => import('./pages/Planning').then(({ Planning }) => ({ default: Planning })))
+const Costs = lazy(() => import('./pages/Costs').then(({ Costs }) => ({ default: Costs })))
+const Infrastructure = lazy(() => import('./pages/Infrastructure').then(({ Infrastructure }) => ({ default: Infrastructure })))
+const Security = lazy(() => import('./pages/Security').then(({ Security }) => ({ default: Security })))
+const Network = lazy(() => import('./pages/Network').then(({ Network }) => ({ default: Network })))
+const Services = lazy(() => import('./pages/Services').then(({ Services }) => ({ default: Services })))
 
 const pageTitles: Record<RouteKey, string> = {
   dashboard: 'Dashboard',
@@ -30,17 +32,19 @@ function CloudApplication() {
 
   return (
     <DashboardLayout route={route} title={pageTitles[route]} onNavigate={(nextRoute) => navigate(`/${nextRoute}`)}>
-      <Routes>
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/planning" element={<Planning />} />
-        <Route path="/costs" element={<Costs />} />
-        <Route path="/infrastructure" element={<Infrastructure />} />
-        <Route path="/security" element={<Security />} />
-        <Route path="/network" element={<Network />} />
-        <Route path="/services" element={<Services />} />
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
-      </Routes>
+      <Suspense fallback={<div className="flex min-h-[320px] items-center justify-center rounded-2xl border border-slate-200 bg-white text-sm font-semibold text-slate-500">Cargando vista...</div>}>
+        <Routes>
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/planning" element={<Planning />} />
+          <Route path="/costs" element={<Costs />} />
+          <Route path="/infrastructure" element={<Infrastructure />} />
+          <Route path="/security" element={<Security />} />
+          <Route path="/network" element={<Network />} />
+          <Route path="/services" element={<Services />} />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </Suspense>
     </DashboardLayout>
   )
 }

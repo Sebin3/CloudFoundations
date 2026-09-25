@@ -1,7 +1,12 @@
-import type { ReactNode } from 'react'
-import { Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { costDistribution, costTrend, monthlyTotal, regions, securityChecks, services } from '../data/cloudData'
+import { useMemo, useState, type ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { costDistribution, costItems, costTrend, regions, securityChecks, services } from '../data/cloudData'
 import { Icon } from '../components/Icon'
+import { Button } from '../components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
+import { useSelectedRegion } from '../context/selectedRegion'
+import { usePersistentState } from '../hooks/usePersistentState'
 
 type DashboardTone = 'blue' | 'green' | 'amber' | 'purple'
 type DashboardStatusTone = 'success' | 'warning' | 'danger' | 'info' | 'neutral'
@@ -81,8 +86,34 @@ function ServiceRow({ service }: { service: (typeof services)[number] }) {
   )
 }
 
+function securityIconClass(tone: DashboardStatusTone) {
+  return tone === 'success' ? 'text-emerald-600' : tone === 'warning' ? 'text-amber-600' : tone === 'danger' ? 'text-red-600' : 'text-slate-500'
+}
+
 export function Dashboard() {
-  const annualTotal = monthlyTotal * 12
+  const navigate = useNavigate()
+  const { selectedRegion: selectedRegionCode } = useSelectedRegion()
+  const [range, setRange] = useState('6')
+  const [usageHours] = usePersistentState<number>('cloudfoundations.usageHours', 720)
+  const [selectedCostServices] = usePersistentState<string[]>('cloudfoundations.costServices', costItems.map((item) => item.service))
+  const [quantities] = usePersistentState<Record<string, number>>('cloudfoundations.costQuantities', Object.fromEntries(costItems.map((item) => [item.service, item.quantity])))
+  const calculatedCostItems = useMemo(() => costItems.filter((item) => selectedCostServices.includes(item.service)).map((item) => {
+    const quantity = quantities[item.service] ?? item.quantity
+    const unitHourlyCost = item.monthly / (item.quantity * item.hours)
+    return { ...item, monthly: quantity * usageHours * unitHourlyCost }
+  }), [quantities, selectedCostServices, usageHours])
+  const dashboardMonthlyTotal = calculatedCostItems.reduce((total, item) => total + item.monthly, 0)
+  const annualTotal = dashboardMonthlyTotal * 12
+  const dashboardCostDistribution = calculatedCostItems.map((item, index) => ({ name: item.category, value: item.monthly, fill: costDistribution[index]?.fill ?? '#64748b' }))
+  const visibleCostTrend = range === '1' ? costTrend.slice(-1) : range === '3' ? costTrend.slice(-3) : costTrend
+  const selectedRegion = regions.find((region) => region.code === selectedRegionCode) ?? regions[0]
+  const usedServices = services.filter((service) => service.status === 'En uso')
+  const totalResources = regions.reduce((total, region) => total + region.resources, 0)
+  const correctSecurityChecks = securityChecks.filter((check) => check.tone === 'success').length
+  const securityScore = Math.round((securityChecks.reduce((score, check) => score + (check.tone === 'success' ? 1 : check.tone === 'warning' ? 0.8 : 0), 0) / securityChecks.length) * 100)
+  const securityLabel = securityScore >= 90 ? 'Protección alta' : securityScore >= 70 ? 'Requiere seguimiento' : 'Atención prioritaria'
+  const securityTone: DashboardStatusTone = securityScore >= 90 ? 'success' : securityScore >= 70 ? 'warning' : 'danger'
+  const architectureStatus = selectedRegion.tone === 'success' ? 'Operativa' : 'Revisión'
 
   return (
     <div className="flex flex-col gap-6">
@@ -92,30 +123,31 @@ export function Dashboard() {
           <h2 className="mt-2 text-3xl font-bold tracking-[-0.045em] text-slate-800 sm:text-[32px]">Buenos días, Alex</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Este es el estado actual de tu propuesta de arquitectura Cloud.</p>
         </div>
-        <button type="button" className="inline-flex items-center justify-center gap-2 rounded-full border border-blue-600 bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-[0_8px_18px_rgba(37,99,235,0.18)] transition hover:-translate-y-0.5 hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-300">
+        <Button type="button" size="lg" onClick={() => navigate('/planning')} className="h-11 rounded-xl bg-blue-600 px-5 text-sm font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-300">
           <Icon name="add" className="text-[19px]" />
           Nueva propuesta
-        </button>
+        </Button>
       </header>
 
       <section aria-label="Indicadores principales" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <MetricCard label="Costo mensual estimado" value={`$${monthlyTotal.toLocaleString('en-US')}`} detail="Proyección para septiembre" icon="payments" tone="amber" trend="5.2%" />
+        <MetricCard label="Costo mensual estimado" value={`$${dashboardMonthlyTotal.toLocaleString('en-US')}`} detail="Proyección según la configuración actual" icon="payments" tone="amber" trend="5.2%" />
         <MetricCard label="Costo anual estimado" value={`$${annualTotal.toLocaleString('en-US')}`} detail="Proyección de inversión a 12 meses" icon="calendar_month" tone="blue" compact />
-        <MetricCard label="Regiones activas" value={`${regions.length}`} detail={`${regions.map((region) => region.location).join(' · ')}`} icon="location_on" tone="blue" compact />
-        <MetricCard label="Recursos Cloud" value="78" detail="Distribuidos en 3 regiones activas" icon="deployed_code" tone="purple" trend="8.4%" />
-        <MetricCard label="Estado de seguridad" value="92%" detail="4 de 5 controles correctos" icon="shield_lock" tone="green" />
-        <MetricCard label="Estado de arquitectura" value="Operativa" detail="SLA 99.98% · sin incidentes" icon="account_tree" tone="green" compact />
+        <MetricCard label="Región seleccionada" value={selectedRegion.code} detail={`${selectedRegion.name} · ${selectedRegion.location}`} icon="location_on" tone="blue" compact />
+        <MetricCard label="Servicios utilizados" value={`${usedServices.length}`} detail="Componentes activos en la solución" icon="apps" tone="purple" compact />
+        <MetricCard label="Recursos Cloud" value={`${totalResources}`} detail={`Distribuidos en ${regions.length} regiones activas`} icon="deployed_code" tone="purple" trend="8.4%" />
+        <MetricCard label="Estado de seguridad" value={`${securityScore}%`} detail={`${correctSecurityChecks} de ${securityChecks.length} correctos · ${securityChecks.length - correctSecurityChecks} requieren atención`} icon="shield_lock" tone={securityTone === 'success' ? 'green' : 'amber'} />
+        <MetricCard label="Estado de arquitectura" value={architectureStatus} detail={`SLA ${selectedRegion.availability} · ${selectedRegion.status.toLowerCase()}`} icon="account_tree" tone={architectureStatus === 'Operativa' ? 'green' : 'amber'} compact />
       </section>
 
       <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.85fr)]">
-        <DashboardPanel title="Evolución de costos" subtitle="Estimación mensual en USD" action={<button type="button" className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"><span>Últimos 6 meses</span><Icon name="expand_more" className="text-[17px]" /></button>}>
+        <DashboardPanel title="Evolución de costos" subtitle="Estimación mensual en USD" action={<Select value={range} onValueChange={setRange}><SelectTrigger size="sm" className="w-[150px] border-slate-200 bg-white text-xs font-bold text-slate-500"><SelectValue /></SelectTrigger><SelectContent align="end"><SelectItem value="6">Últimos 6 meses</SelectItem><SelectItem value="3">Últimos 3 meses</SelectItem><SelectItem value="1">Último mes</SelectItem></SelectContent></Select>}>
           <div className="mb-3 flex items-center justify-between gap-4 text-xs text-slate-500">
             <span className="inline-flex items-center gap-2"><i className="size-2 rounded-full bg-blue-600" />Costo estimado</span>
             <span className="text-slate-400">Actualizado hace 2 horas</span>
           </div>
           <div className="h-[250px] w-full sm:h-[280px]">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={costTrend} margin={{ top: 12, right: 8, left: -20, bottom: 0 }}>
+              <AreaChart data={visibleCostTrend} margin={{ top: 12, right: 8, left: -20, bottom: 0 }}>
                 <defs><linearGradient id="dashboardCostGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#2563eb" stopOpacity={0.18} /><stop offset="100%" stopColor="#2563eb" stopOpacity={0} /></linearGradient></defs>
                 <CartesianGrid stroke="#e2e8f0" vertical={false} strokeDasharray="4 4" />
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} dy={10} />
@@ -127,38 +159,30 @@ export function Dashboard() {
           </div>
         </DashboardPanel>
 
-        <DashboardPanel title="Resumen de seguridad" subtitle="Última revisión: hoy, 09:42" action={<button type="button" className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-700">Ver detalles <Icon name="arrow_forward" className="text-[16px]" /></button>}>
+        <DashboardPanel title="Resumen de seguridad" subtitle="Última revisión: hoy, 09:42" action={<Button type="button" variant="link" size="sm" onClick={() => navigate('/security')} className="h-auto p-0 text-xs font-bold text-blue-600">Ver detalles <Icon name="arrow_forward" className="text-[16px]" /></Button>}>
           <div className="flex items-center gap-4">
             <div className="relative flex size-24 shrink-0 items-center justify-center rounded-full border-[9px] border-emerald-100 border-r-emerald-500">
               <div className="text-center"><strong className="block text-2xl font-bold leading-none text-slate-800">92</strong><span className="mt-1 block text-[10px] text-slate-400">/ 100</span></div>
             </div>
             <div className="min-w-0">
-              <DashboardStatus label="Protección alta" tone="success" />
+              <DashboardStatus label={securityLabel} tone={securityTone} />
               <p className="mt-2 text-xs leading-5 text-slate-500">La arquitectura cumple con los controles principales de seguridad.</p>
             </div>
           </div>
           <div className="mt-5 h-2 overflow-hidden rounded-full bg-slate-100"><span className="block h-full w-[92%] rounded-full bg-gradient-to-r from-emerald-400 to-emerald-600" /></div>
           <div className="mt-5 divide-y divide-slate-100">
-            {securityChecks.slice(0, 3).map((check) => <div className="flex items-center gap-2.5 py-3 first:pt-0 last:pb-0" key={check.label}><Icon name={check.icon} className="shrink-0 text-[18px] text-emerald-600" /><span className="min-w-0 flex-1 truncate text-xs text-slate-500">{check.label}</span><DashboardStatus label={check.status} tone={check.tone} /></div>)}
+            {securityChecks.map((check) => <div className="flex items-center gap-2.5 py-3 first:pt-0 last:pb-0" key={check.label}><Icon name={check.icon} className={`shrink-0 text-[18px] ${securityIconClass(check.tone)}`} /><span className="min-w-0 flex-1 truncate text-xs text-slate-500">{check.label}</span><DashboardStatus label={check.status} tone={check.tone} /></div>)}
           </div>
         </DashboardPanel>
       </div>
 
       <div className="grid min-w-0 gap-4 lg:grid-cols-2">
-        <DashboardPanel title="Distribución de costos" subtitle="Por categoría de servicio" action={<button type="button" aria-label="Más opciones de costos" className="inline-flex rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-blue-600"><Icon name="more_horiz" className="text-[19px]" /></button>}>
-          <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center">
-            <div className="relative size-44 shrink-0">
-              <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={costDistribution} dataKey="value" nameKey="name" innerRadius={58} outerRadius={82} paddingAngle={3} stroke="none">{costDistribution.map((entry) => <Cell key={entry.name} fill={entry.fill} />)}</Pie><Tooltip formatter={(value) => [`$${value}`, 'Mensual']} /></PieChart></ResponsiveContainer>
-              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"><strong className="text-xl font-bold tracking-[-0.04em] text-slate-800">${monthlyTotal}</strong><span className="text-[10px] text-slate-400">mensual</span></div>
-            </div>
-            <div className="flex w-full flex-1 flex-col gap-3">
-              {costDistribution.map((entry) => <div className="flex items-center justify-between gap-4 text-xs text-slate-500" key={entry.name}><span className="inline-flex items-center gap-2"><i className="size-2 rounded-full" style={{ backgroundColor: entry.fill }} />{entry.name}</span><strong className="text-sm text-slate-800">${entry.value}</strong></div>)}
-            </div>
-          </div>
+        <DashboardPanel title="Distribución de costos" subtitle="Por categoría de servicio" action={<span aria-hidden="true" className="inline-flex rounded-lg p-1.5 text-slate-300"><Icon name="more_horiz" className="text-[19px]" /></span>}>
+          {dashboardCostDistribution.length > 0 ? <><div className="mb-3 flex items-center justify-between gap-3"><span className="text-xs text-slate-500">Costo mensual total</span><strong className="text-sm font-extrabold text-slate-800">${dashboardMonthlyTotal.toLocaleString('en-US')}</strong></div><div className="h-[245px] w-full"><ResponsiveContainer width="100%" height="100%"><BarChart data={dashboardCostDistribution} layout="vertical" margin={{ top: 4, right: 12, left: 0, bottom: 4 }}><CartesianGrid stroke="#e2e8f0" horizontal={false} /><XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10 }} tickFormatter={(value) => `$${value}`} /><YAxis type="category" dataKey="name" width={84} axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} /><Tooltip cursor={{ fill: '#f8fafc' }} formatter={(value) => [`$${Number(value ?? 0).toLocaleString('en-US')}`, 'Mensual']} /><Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={22}>{dashboardCostDistribution.map((entry) => <Cell key={entry.name} fill={entry.fill} />)}</Bar></BarChart></ResponsiveContainer></div></> : <div className="flex min-h-[245px] flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-6 text-center"><Icon name="bar_chart" className="text-[28px] text-slate-300" /><p className="mt-3 text-sm font-bold text-slate-700">Sin costos para distribuir</p><p className="mt-1 text-xs leading-5 text-slate-500">Activa un servicio desde el módulo de Costos para visualizar la distribución.</p></div>}
         </DashboardPanel>
 
-        <DashboardPanel title="Servicios principales" subtitle="Componentes activos en la solución" action={<button type="button" className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-700">Ver catálogo <Icon name="arrow_forward" className="text-[16px]" /></button>}>
-          <div>{services.slice(0, 4).map((service) => <ServiceRow service={service} key={service.id} />)}</div>
+        <DashboardPanel title="Servicios principales" subtitle="Componentes activos en la solución" action={<Button type="button" variant="link" size="sm" onClick={() => navigate('/services')} className="h-auto p-0 text-xs font-bold text-blue-600">Ver catálogo <Icon name="arrow_forward" className="text-[16px]" /></Button>}>
+          <div>{usedServices.map((service) => <ServiceRow service={service} key={service.id} />)}</div>
         </DashboardPanel>
       </div>
 
@@ -173,10 +197,10 @@ export function Dashboard() {
       <section>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div><p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-slate-400">Catálogo rápido</p><h2 className="mt-2 text-2xl font-bold tracking-[-0.035em] text-slate-800">Servicios utilizados</h2></div>
-          <button type="button" className="inline-flex items-center gap-2 self-start rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 sm:self-auto">Ver todos <Icon name="arrow_forward" className="text-[16px]" /></button>
+          <Button type="button" variant="outline" size="lg" onClick={() => navigate('/services')} className="self-start rounded-xl text-xs font-bold text-slate-600 sm:self-auto">Ver todos <Icon name="arrow_forward" className="text-[16px]" /></Button>
         </div>
         <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {services.slice(0, 4).map((service) => {
+          {usedServices.map((service) => {
             const iconTone = service.iconTone === 'warning' ? 'bg-amber-50 text-amber-600' : service.iconTone === 'success' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'
             return <article className="group flex min-h-[190px] flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.04)] transition duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-[0_12px_30px_rgba(37,99,235,0.09)]" key={service.id}><div className="flex items-start justify-between gap-3"><div className={`flex size-11 items-center justify-center rounded-xl ${iconTone}`}><Icon name={service.icon} className="text-[21px]" /></div><DashboardStatus label={service.status} tone={service.status === 'En uso' ? 'success' : 'neutral'} /></div><h3 className="mt-4 text-base font-bold text-slate-800">{service.name}</h3><span className="mt-1 text-xs text-slate-400">{service.category}</span><p className="mt-3 flex-1 text-sm leading-5 text-slate-500">{service.description}</p><div className="mt-4 border-t border-slate-100 pt-3"><span className="block text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">Uso principal</span><strong className="mt-1 block text-xs font-semibold text-slate-600">{service.purpose}</strong></div></article>
           })}
