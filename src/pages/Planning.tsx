@@ -8,17 +8,9 @@ import { Input } from '../components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Textarea } from '../components/ui/textarea'
 import { usePersistentState } from '../hooks/usePersistentState'
+import type { SolutionPlan } from '../types/planning'
 
-type SolutionForm = {
-  solutionName: string
-  applicationType: string
-  description: string
-  region: string
-  users: string
-  availability: string
-  objective: string
-  selectedServices: string[]
-}
+type SolutionForm = SolutionPlan
 
 const initialForm: SolutionForm = {
   solutionName: '',

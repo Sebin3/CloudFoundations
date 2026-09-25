@@ -120,7 +120,7 @@ export function Dashboard() {
       <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-blue-600">Vista general</p>
-          <h2 className="mt-2 text-3xl font-bold tracking-[-0.045em] text-slate-800 sm:text-[32px]">Buenos días, Alex</h2>
+          <h2 className="mt-2 text-3xl font-bold tracking-[-0.045em] text-slate-800 sm:text-[32px]">Buenos días, Sebastian</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Este es el estado actual de tu propuesta de arquitectura Cloud.</p>
         </div>
         <Button type="button" size="lg" onClick={() => navigate('/planning')} className="h-11 rounded-xl bg-blue-600 px-5 text-sm font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-300">

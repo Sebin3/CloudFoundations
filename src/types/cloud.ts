@@ -22,6 +22,7 @@ export type CloudService = {
 }
 
 export type CostItem = {
+  serviceId: string
   service: string
   category: string
   quantity: number

@@ -1,11 +1,13 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { CostCard } from '../components/CostCard'
 import { Icon } from '../components/Icon'
 import { Alert, AlertDescription } from '../components/ui/alert'
 import { Button } from '../components/ui/button'
-import { costItems, costTrend } from '../data/cloudData'
+import { costItems } from '../data/cloudData'
 import { usePersistentState } from '../hooks/usePersistentState'
+import { savedProposalStorageKey, type SolutionPlan } from '../types/planning'
 
 const budget = 450
 const usageProfiles = [
@@ -19,40 +21,60 @@ function formatCurrency(value: number, fractionDigits = 0) {
 }
 
 export function Costs() {
+  const navigate = useNavigate()
+  const [savedProposal] = usePersistentState<SolutionPlan | null>(savedProposalStorageKey, null)
   const [usageHours, setUsageHours] = usePersistentState<number>('cloudfoundations.usageHours', 720)
-  const [selectedServices, setSelectedServices] = usePersistentState<string[]>('cloudfoundations.costServices', costItems.map((item) => item.service))
-  const [quantities, setQuantities] = usePersistentState<Record<string, number>>('cloudfoundations.costQuantities', Object.fromEntries(costItems.map((item) => [item.service, item.quantity])))
+  const [selectedServices, setSelectedServices] = usePersistentState<string[]>('cloudfoundations.costServices', [])
+  const [quantities, setQuantities] = usePersistentState<Record<string, number>>('cloudfoundations.costQuantities', {})
+  const [syncedPlanSignature, setSyncedPlanSignature] = usePersistentState('cloudfoundations.costPlanSignature', '')
   const [exportMessage, setExportMessage] = useState('')
 
-  const calculatedItems = useMemo(() => costItems.filter((item) => selectedServices.includes(item.service)).map((item) => {
+  const planServiceIds = savedProposal?.selectedServices ?? []
+  const plannedCostItems = useMemo(() => costItems.filter((item) => planServiceIds.includes(item.serviceId)), [planServiceIds])
+  const planSignature = savedProposal ? JSON.stringify(savedProposal) : 'none'
+
+  useEffect(() => {
+    if (syncedPlanSignature === planSignature) return
+
+    if (!savedProposal) {
+      setSelectedServices([])
+      setQuantities({})
+      setSyncedPlanSignature('none')
+      return
+    }
+
+    setSelectedServices(plannedCostItems.map((item) => item.serviceId))
+    setQuantities(Object.fromEntries(plannedCostItems.map((item) => [item.serviceId, 1])))
+    setUsageHours(720)
+    setSyncedPlanSignature(planSignature)
+  }, [planSignature, plannedCostItems, savedProposal, setQuantities, setSelectedServices, setSyncedPlanSignature, setUsageHours, syncedPlanSignature])
+
+  const activeSelectedServices = savedProposal
+    ? selectedServices.filter((serviceId) => planServiceIds.includes(serviceId))
+    : []
+
+  const calculatedItems = useMemo(() => costItems.filter((item) => activeSelectedServices.includes(item.serviceId)).map((item) => {
     const unitHourlyCost = item.monthly / (item.quantity * item.hours)
-    const quantity = quantities[item.service] ?? item.quantity
+    const quantity = quantities[item.serviceId] ?? 1
     const monthly = quantity * usageHours * unitHourlyCost
     return { ...item, quantity, hours: usageHours, unitHourlyCost, monthly, annual: monthly * 12 }
-  }), [quantities, selectedServices, usageHours])
+  }), [activeSelectedServices, quantities, usageHours])
 
   const monthlyTotal = calculatedItems.reduce((total, item) => total + item.monthly, 0)
   const annualTotal = monthlyTotal * 12
-  const budgetPercent = Math.round((monthlyTotal / budget) * 100)
-  const costTrendData = useMemo(() => {
-    const baseline = costItems.reduce((total, item) => total + item.monthly, 0)
-    const multiplier = baseline > 0 ? monthlyTotal / baseline : 0
-    return costTrend.map((item) => ({ ...item, cost: Math.round(item.cost * multiplier) }))
-  }, [monthlyTotal])
+  const budgetPercent = savedProposal ? Math.round((monthlyTotal / budget) * 100) : 0
+  const costTrendData = savedProposal && calculatedItems.length > 0 ? [{ month: 'Actual', cost: Math.round(monthlyTotal) }] : []
   const selectedProfile = usageProfiles.find((profile) => profile.hours === usageHours) ?? usageProfiles[0]
 
   const changeQuantity = (service: string, delta: number) => {
     setQuantities((current) => ({ ...current, [service]: Math.max(0, Math.min(20, (current[service] ?? 0) + delta)) }))
   }
 
-  const toggleService = (service: string) => {
-    setSelectedServices((current) => current.includes(service) ? current.filter((item) => item !== service) : [...current, service])
-  }
-
   const reset = () => {
+    if (!savedProposal) return
     setUsageHours(720)
-    setSelectedServices(costItems.map((item) => item.service))
-    setQuantities(Object.fromEntries(costItems.map((item) => [item.service, item.quantity])))
+    setSelectedServices(plannedCostItems.map((item) => item.serviceId))
+    setQuantities(Object.fromEntries(plannedCostItems.map((item) => [item.serviceId, 1])))
     setExportMessage('')
   }
 
@@ -78,17 +100,19 @@ export function Costs() {
       <header className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div><p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-amber-600">Economía Cloud</p><h2 className="mt-1 text-3xl font-bold tracking-[-0.045em] text-slate-800 sm:text-[32px]">Costos y consumo</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">Configura la capacidad con controles simples y revisa el impacto económico al instante.</p></div>
         <div className="flex flex-col gap-2 sm:flex-row">
-          <Button type="button" size="lg" onClick={exportReport} className="w-full bg-blue-600 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 sm:w-auto"><Icon name="download" className="text-[18px]" />Exportar reporte</Button>
-          <Button type="button" size="lg" variant="outline" onClick={reset} className="w-full text-sm font-bold sm:w-auto"><Icon name="refresh" className="text-[18px]" />Restablecer</Button>
+          <Button type="button" size="lg" onClick={exportReport} disabled={!savedProposal || calculatedItems.length === 0} className="w-full bg-blue-600 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 sm:w-auto"><Icon name="download" className="text-[18px]" />Exportar reporte</Button>
+          <Button type="button" size="lg" variant="outline" onClick={reset} disabled={!savedProposal} className="w-full text-sm font-bold sm:w-auto"><Icon name="refresh" className="text-[18px]" />Restablecer</Button>
         </div>
       </header>
+
+      {!savedProposal && <Alert className="border-blue-200 bg-blue-50 text-blue-800"><Icon name="info" className="text-[20px] text-blue-600" /><AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><span><strong className="block text-sm text-blue-900">Aún no hay una planificación registrada</strong><span className="mt-1 block text-xs text-blue-700">Crea una propuesta para cargar aquí sus servicios y calcular el costo correspondiente.</span></span><Button type="button" size="sm" onClick={() => navigate('/planning')} className="w-fit shrink-0 bg-blue-600 text-xs font-bold text-white hover:bg-blue-700">Crear planificación</Button></AlertDescription></Alert>}
 
       {exportMessage && <Alert role="status" className="border-emerald-200 bg-emerald-50 text-emerald-800"><Icon name="check_circle" className="text-[20px] text-emerald-600" /><AlertDescription className="font-medium text-emerald-700">{exportMessage}</AlertDescription></Alert>}
 
       <div className="grid gap-3 md:grid-cols-3">
-        <CostCard label="Total mensual" value={formatCurrency(monthlyTotal)} detail="Estimación de la configuración" icon="payments" featured />
-        <CostCard label="Proyección anual" value={formatCurrency(annualTotal)} detail="Costo estimado a 12 meses" icon="calendar_month" tone="info" />
-        <CostCard label="Presupuesto utilizado" value={`${budgetPercent}%`} detail={`${formatCurrency(monthlyTotal)} de ${formatCurrency(budget)}`} icon="show_chart" tone={monthlyTotal <= budget ? 'success' : 'warning'} progress={budgetPercent} />
+        <CostCard label="Total mensual" value={savedProposal ? formatCurrency(monthlyTotal) : '—'} detail={savedProposal ? 'Estimación de la planificación actual' : 'Registra una planificación'} icon="payments" featured />
+        <CostCard label="Proyección anual" value={savedProposal ? formatCurrency(annualTotal) : '—'} detail={savedProposal ? 'Costo estimado a 12 meses' : 'Sin datos para proyectar'} icon="calendar_month" tone="info" />
+        <CostCard label="Presupuesto utilizado" value={savedProposal ? `${budgetPercent}%` : '—'} detail={savedProposal ? `${formatCurrency(monthlyTotal)} de ${formatCurrency(budget)}` : 'Se calcula al cargar el plan'} icon="show_chart" tone={monthlyTotal <= budget ? 'success' : 'warning'} progress={savedProposal ? budgetPercent : 0} />
       </div>
 
       <div className="grid min-w-0 grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,.95fr)]">
@@ -111,7 +135,7 @@ export function Costs() {
             </div>
           </div>
 
-          <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50/50 p-3"><div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-bold text-slate-700">Servicios con consumo estimado</p><p className="mt-0.5 text-[11px] leading-5 text-slate-500">Selecciona los servicios que participarán en el cálculo actual.</p></div><span className="text-[11px] font-bold text-blue-700">{selectedServices.length} de {costItems.length}</span></div><div className="mt-3 flex flex-wrap gap-2">{costItems.map((item) => { const selected = selectedServices.includes(item.service); return <Button type="button" key={item.service} size="sm" variant={selected ? 'default' : 'outline'} onClick={() => toggleService(item.service)} aria-pressed={selected} className={`rounded-full text-[11px] font-bold ${selected ? 'bg-blue-600 text-white hover:bg-blue-700' : 'border-slate-300 bg-white text-slate-500 hover:border-blue-300 hover:text-blue-700'}`}>{item.service}</Button> })}</div><p className="mt-3 border-t border-blue-100 pt-3 text-[10px] leading-4 text-slate-500">El catálogo Cloud tiene 7 servicios. Esta estimación usa 5 con consumo directo; IAM y VPC base requieren conceptos asociados para calcular cargos específicos.</p></div>
+          <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50/50 p-3"><div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-bold text-slate-700">Servicios facturables del plan</p><p className="mt-0.5 text-[11px] leading-5 text-slate-500">Se cargan desde la planificación registrada. Ajusta capacidad y horas sin duplicar servicios.</p></div><span className="text-[11px] font-bold text-blue-700">{activeSelectedServices.length} de {plannedCostItems.length}</span></div><div className="mt-3 flex flex-wrap gap-2">{plannedCostItems.length > 0 ? plannedCostItems.map((item) => <span key={item.serviceId} className="inline-flex items-center gap-1.5 rounded-full bg-blue-600 px-3 py-1.5 text-[11px] font-bold text-white"><Icon name="check" className="text-[14px]" />{item.service}</span>) : <span className="text-xs text-slate-500">La planificación solo contiene servicios sin consumo directo estimable.</span>}</div><p className="mt-3 border-t border-blue-100 pt-3 text-[10px] leading-4 text-slate-500">IAM y VPC se muestran en la arquitectura, pero no tienen un cargo base calculable sin definir políticas, tráfico o componentes asociados.</p></div>
 
           <div className="mt-4 divide-y divide-slate-100 rounded-xl border border-slate-200">
             {calculatedItems.length > 0 ? calculatedItems.map((item) => (

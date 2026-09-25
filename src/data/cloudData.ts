@@ -81,11 +81,11 @@ export const services: CloudService[] = [
 ]
 
 export const costItems: CostItem[] = [
-  { service: 'Amazon EC2', category: 'Compute', quantity: 3, hours: 720, monthly: 184, annual: 2208, icon: 'dns', iconTone: 'info' },
-  { service: 'Amazon RDS', category: 'Database', quantity: 1, hours: 720, monthly: 96, annual: 1152, icon: 'storage', iconTone: 'warning' },
-  { service: 'Amazon S3', category: 'Storage', quantity: 2, hours: 720, monthly: 42, annual: 504, icon: 'database', iconTone: 'success' },
-  { service: 'CloudFront', category: 'Delivery', quantity: 1, hours: 720, monthly: 31, annual: 372, icon: 'public', iconTone: 'info' },
-  { service: 'Route 53', category: 'Networking', quantity: 1, hours: 720, monthly: 16, annual: 192, icon: 'language', iconTone: 'neutral' },
+  { serviceId: 'ec2', service: 'Amazon EC2', category: 'Compute', quantity: 1, hours: 720, monthly: 61.33, annual: 736, icon: 'dns', iconTone: 'info' },
+  { serviceId: 'rds', service: 'Amazon RDS', category: 'Database', quantity: 1, hours: 720, monthly: 96, annual: 1152, icon: 'storage', iconTone: 'warning' },
+  { serviceId: 's3', service: 'Amazon S3', category: 'Storage', quantity: 1, hours: 720, monthly: 21, annual: 252, icon: 'database', iconTone: 'success' },
+  { serviceId: 'cloudfront', service: 'CloudFront', category: 'Delivery', quantity: 1, hours: 720, monthly: 31, annual: 372, icon: 'public', iconTone: 'info' },
+  { serviceId: 'route53', service: 'Route 53', category: 'Networking', quantity: 1, hours: 720, monthly: 16, annual: 192, icon: 'language', iconTone: 'neutral' },
 ]
 
 export const costTrend = [
